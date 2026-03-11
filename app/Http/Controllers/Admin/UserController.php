@@ -44,6 +44,7 @@ class UserController extends Controller
             'password' => 'required|min:6',
             'role' => 'required|in:admin,empleado',
             'pin' => 'required|size:4|unique:users',
+            'horas_diarias' => 'required|numeric|min:1|max:24',
         ]);
 
         User::create([
@@ -52,6 +53,7 @@ class UserController extends Controller
             'password' => Hash::make($request->password),
             'role' => $request->role,
             'pin' => $request->pin,
+            'horas_diarias' => $request->horas_diarias,
         ]);
 
         ActivityLog::registrar('usuario_creado', "Empleado creado: {$request->name} ({$request->email})", 'User');
@@ -148,6 +150,7 @@ class UserController extends Controller
             'role' => 'required|in:admin,empleado',
             'pin' => 'required|size:4|unique:users,pin,' . $user->id,
             'password' => 'nullable|min:6',
+            'horas_diarias' => 'required|numeric|min:1|max:24',
         ]);
 
         $data = [
@@ -155,6 +158,7 @@ class UserController extends Controller
             'email' => $request->email,
             'role' => $request->role,
             'pin' => $request->pin,
+            'horas_diarias' => $request->horas_diarias,
         ];
 
         if ($request->filled('password')) {

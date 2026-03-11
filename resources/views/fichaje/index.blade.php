@@ -238,6 +238,15 @@
         }
     }
 
+    // QR auto-fill: if ?pin= param is present, auto-submit
+    (function() {
+        const params = new URLSearchParams(window.location.search);
+        const qrPin = params.get('pin');
+        if (qrPin && /^\d{4}$/.test(qrPin)) {
+            qrPin.split('').forEach(d => addDigit(d));
+        }
+    })();
+
     // Keyboard support
     document.addEventListener('keydown', function(e) {
         if (e.key >= '0' && e.key <= '9') {
