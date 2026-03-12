@@ -30,6 +30,10 @@ class AuthController extends Controller
                 Auth::logout();
                 return back()->withErrors(['email' => 'Esta área es solo para empleados.']);
             }
+            if (!Auth::user()->active) {
+                Auth::logout();
+                return back()->withErrors(['email' => 'Tu cuenta está desactivada. Contacta con el administrador.'])->onlyInput('email');
+            }
             $request->session()->regenerate();
             return redirect()->route('empleado.dashboard');
         }

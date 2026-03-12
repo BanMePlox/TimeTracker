@@ -36,16 +36,18 @@
                 <th class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-4">Email</th>
                 <th class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-4">PIN</th>
                 <th class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-4">Rol</th>
+                <th class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-4">Estado</th>
                 <th class="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-4">Fichajes</th>
                 <th class="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-4">Acciones</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-50">
             @foreach($users as $user)
-            <tr class="hover:bg-gray-50 transition-colors">
+            <tr class="hover:bg-gray-50 transition-colors {{ !$user->active ? 'opacity-60' : '' }}">
                 <td class="px-6 py-4">
                     <div class="flex items-center">
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm mr-3 {{ $user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500' }}">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm mr-3
+                            {{ !$user->active ? 'bg-gray-400' : ($user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500') }}">
                             {{ substr($user->name, 0, 1) }}
                         </div>
                         <span class="text-gray-900 font-medium">{{ $user->name }}</span>
@@ -68,6 +70,19 @@
                         </span>
                     @endif
                 </td>
+                <td class="px-6 py-4">
+                    @if($user->active)
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                            Activo
+                        </span>
+                    @else
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+                            <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                            Inactivo
+                        </span>
+                    @endif
+                </td>
                 <td class="px-6 py-4 text-gray-600 text-sm">
                     {{ $user->fichajes_count }}
                 </td>
@@ -87,6 +102,23 @@
                             </svg>
                         </a>
                         @if($user->id !== auth()->id())
+                        {{-- Toggle activo/inactivo --}}
+                        <form action="{{ route('admin.users.toggle-activo', $user) }}" method="POST">
+                            @csrf
+                            <button type="submit"
+                                    title="{{ $user->active ? 'Desactivar usuario' : 'Reactivar usuario' }}"
+                                    class="p-2 rounded-lg transition-colors {{ $user->active ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:text-green-600 hover:bg-green-50' }}">
+                                @if($user->active)
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                </svg>
+                                @else
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                @endif
+                            </button>
+                        </form>
                         <form action="{{ route('admin.users.destroy', $user) }}" method="POST"
                               onsubmit="return confirm('¿Eliminar a {{ addslashes($user->name) }}? Esta acción no se puede deshacer.')">
                             @csrf

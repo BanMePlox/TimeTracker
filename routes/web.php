@@ -49,6 +49,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->name('admin.')->group(fun
     // Users
     Route::resource('users', UserController::class);
     Route::post('users/{user}/regenerar-pin', [UserController::class, 'regenerarPin'])->name('users.regenerar-pin');
+    Route::post('users/{user}/toggle-activo', [UserController::class, 'toggleActivo'])->name('users.toggle-activo');
 
     // Fichajes
     Route::get('fichajes', [AdminFichajeController::class, 'index'])->name('fichajes.index');

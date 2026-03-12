@@ -193,4 +193,17 @@ class UserController extends Controller
         ActivityLog::registrar('pin_regenerado', "PIN regenerado para: {$user->name}", 'User', $user->id);
         return back()->with('success', "PIN regenerado: {$pin}");
     }
+
+    public function toggleActivo(User $user)
+    {
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'No puedes desactivarte a ti mismo.');
+        }
+
+        $user->update(['active' => !$user->active]);
+        $estado = $user->active ? 'reactivado' : 'desactivado';
+
+        ActivityLog::registrar("usuario_{$estado}", "Empleado {$estado}: {$user->name}", 'User', $user->id);
+        return back()->with('success', "Usuario {$estado} correctamente.");
+    }
 }

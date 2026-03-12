@@ -64,6 +64,11 @@ class FichajeController extends Controller
         Cache::forget($keyIntentos);
         Cache::forget($keyNivel);
 
+        // ── Comprobar que el usuario está activo ───────────────────────────────
+        if (!$user->active) {
+            return back()->with('error', 'Usuario desactivado. Contacta con el administrador.');
+        }
+
         // ── Determinar estado actual ───────────────────────────────────────────
         $ultimoFichaje = Fichaje::where('user_id', $user->id)
             ->whereDate('created_at', today())
