@@ -34,7 +34,7 @@
             </div>
         </div>
 
-        <form action="{{ route('admin.users.store') }}" method="POST" class="p-6 space-y-5">
+        <form action="{{ route('admin.users.store') }}" method="POST" enctype="multipart/form-data" class="p-6 space-y-5">
             @csrf
 
             <input type="hidden" name="pin" id="pin-field" value="{{ $pin }}">

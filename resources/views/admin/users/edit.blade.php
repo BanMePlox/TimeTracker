@@ -37,7 +37,7 @@
             </div>
         </div>
 
-        <form action="{{ route('admin.users.update', $user) }}" method="POST" class="p-6 space-y-5">
+        <form action="{{ route('admin.users.update', $user) }}" method="POST" enctype="multipart/form-data" class="p-6 space-y-5">
             @csrf
             @method('PUT')
 
@@ -102,6 +102,32 @@
                            min="1" max="24" step="0.5" required>
                     <p class="text-gray-400 text-xs mt-1">Jornada laboral esperada por día</p>
                 </div>
+            </div>
+
+            <!-- Avatar -->
+            <div class="border border-gray-200 rounded-xl p-5 space-y-4">
+                <p class="text-sm font-medium text-gray-700">Foto de perfil</p>
+                <div class="flex items-center gap-5">
+                    @if($user->avatar_url)
+                        <img src="{{ $user->avatar_url }}" alt="{{ $user->name }}"
+                             class="w-20 h-20 rounded-full object-cover border border-gray-200">
+                    @else
+                        <div class="w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-2xl {{ $user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500' }}">
+                            {{ substr($user->name, 0, 1) }}
+                        </div>
+                    @endif
+                    <div class="flex-1 space-y-2">
+                        <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp"
+                               class="w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <p class="text-gray-400 text-xs">JPG, PNG o WebP. Máx. 2 MB.</p>
+                    </div>
+                </div>
+                @if($user->avatar_url)
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="delete_avatar" name="delete_avatar" value="1" class="rounded border-gray-300 text-red-500">
+                    <label for="delete_avatar" class="text-sm text-red-600 cursor-pointer">Eliminar foto actual</label>
+                </div>
+                @endif
             </div>
 
             <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">

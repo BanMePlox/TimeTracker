@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
@@ -39,22 +40,29 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
-            'role' => 'required|in:admin,empleado',
-            'pin' => 'required|size:4|unique:users',
+            'name'          => 'required|string|max:255',
+            'email'         => 'required|email|unique:users',
+            'password'      => 'required|min:6',
+            'role'          => 'required|in:admin,empleado',
+            'pin'           => 'required|size:4|unique:users',
             'horas_diarias' => 'required|numeric|min:1|max:24',
+            'avatar'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
-        User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => $request->role,
-            'pin' => $request->pin,
+        $data = [
+            'name'          => $request->name,
+            'email'         => $request->email,
+            'password'      => Hash::make($request->password),
+            'role'          => $request->role,
+            'pin'           => $request->pin,
             'horas_diarias' => $request->horas_diarias,
-        ]);
+        ];
+
+        if ($request->hasFile('avatar')) {
+            $data['avatar'] = $request->file('avatar')->store('avatars', 'public');
+        }
+
+        User::create($data);
 
         ActivityLog::registrar('usuario_creado', "Empleado creado: {$request->name} ({$request->email})", 'User');
         return redirect()->route('admin.users.index')
@@ -145,24 +153,37 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'role' => 'required|in:admin,empleado',
-            'pin' => 'required|size:4|unique:users,pin,' . $user->id,
-            'password' => 'nullable|min:6',
+            'name'          => 'required|string|max:255',
+            'email'         => 'required|email|unique:users,email,' . $user->id,
+            'role'          => 'required|in:admin,empleado',
+            'pin'           => 'required|size:4|unique:users,pin,' . $user->id,
+            'password'      => 'nullable|min:6',
             'horas_diarias' => 'required|numeric|min:1|max:24',
+            'avatar'        => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         $data = [
-            'name' => $request->name,
-            'email' => $request->email,
-            'role' => $request->role,
-            'pin' => $request->pin,
+            'name'          => $request->name,
+            'email'         => $request->email,
+            'role'          => $request->role,
+            'pin'           => $request->pin,
             'horas_diarias' => $request->horas_diarias,
         ];
 
         if ($request->filled('password')) {
             $data['password'] = Hash::make($request->password);
+        }
+
+        if ($request->hasFile('avatar')) {
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $data['avatar'] = $request->file('avatar')->store('avatars', 'public');
+        }
+
+        if ($request->boolean('delete_avatar') && $user->avatar) {
+            Storage::disk('public')->delete($user->avatar);
+            $data['avatar'] = null;
         }
 
         $user->update($data);
@@ -192,6 +213,16 @@ class UserController extends Controller
 
         ActivityLog::registrar('pin_regenerado', "PIN regenerado para: {$user->name}", 'User', $user->id);
         return back()->with('success', "PIN regenerado: {$pin}");
+    }
+
+    public function deleteAvatar(User $user)
+    {
+        if ($user->avatar) {
+            Storage::disk('public')->delete($user->avatar);
+            $user->update(['avatar' => null]);
+        }
+
+        return back()->with('success', 'Imagen eliminada correctamente.');
     }
 
     public function toggleActivo(User $user)

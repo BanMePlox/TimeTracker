@@ -46,10 +46,15 @@
             <tr class="hover:bg-gray-50 transition-colors {{ !$user->active ? 'opacity-60' : '' }}">
                 <td class="px-6 py-4">
                     <div class="flex items-center">
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm mr-3
-                            {{ !$user->active ? 'bg-gray-400' : ($user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500') }}">
-                            {{ substr($user->name, 0, 1) }}
-                        </div>
+                        @if($user->avatar_url)
+                            <img src="{{ $user->avatar_url }}" alt="{{ $user->name }}"
+                                 class="w-10 h-10 rounded-full object-cover mr-3 {{ !$user->active ? 'opacity-60' : '' }}">
+                        @else
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm mr-3
+                                {{ !$user->active ? 'bg-gray-400' : ($user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500') }}">
+                                {{ substr($user->name, 0, 1) }}
+                            </div>
+                        @endif
                         <span class="text-gray-900 font-medium">{{ $user->name }}</span>
                     </div>
                 </td>

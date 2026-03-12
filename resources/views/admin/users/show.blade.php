@@ -16,9 +16,14 @@
     <!-- User Info Card -->
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6 flex items-center justify-between">
         <div class="flex items-center">
-            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mr-5 {{ $user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500' }}">
-                {{ substr($user->name, 0, 1) }}
-            </div>
+            @if($user->avatar_url)
+                <img src="{{ $user->avatar_url }}" alt="{{ $user->name }}"
+                     class="w-16 h-16 rounded-2xl object-cover mr-5 border border-gray-200">
+            @else
+                <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mr-5 {{ $user->role === 'admin' ? 'bg-purple-500' : 'bg-blue-500' }}">
+                    {{ substr($user->name, 0, 1) }}
+                </div>
+            @endif
             <div>
                 <h3 class="text-xl font-bold text-gray-900">{{ $user->name }}</h3>
                 <p class="text-gray-500">{{ $user->email }}</p>

@@ -27,6 +27,7 @@ class User extends Authenticatable
         'role',
         'horas_diarias',
         'active',
+        'avatar',
     ];
 
     /**
@@ -71,5 +72,10 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar ? asset('storage/' . $this->avatar) : null;
     }
 }

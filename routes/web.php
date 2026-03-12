@@ -50,6 +50,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->name('admin.')->group(fun
     Route::resource('users', UserController::class);
     Route::post('users/{user}/regenerar-pin', [UserController::class, 'regenerarPin'])->name('users.regenerar-pin');
     Route::post('users/{user}/toggle-activo', [UserController::class, 'toggleActivo'])->name('users.toggle-activo');
+    Route::delete('users/{user}/avatar', [UserController::class, 'deleteAvatar'])->name('users.delete-avatar');
 
     // Fichajes
     Route::get('fichajes', [AdminFichajeController::class, 'index'])->name('fichajes.index');
