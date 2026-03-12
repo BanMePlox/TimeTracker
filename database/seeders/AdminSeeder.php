@@ -13,12 +13,12 @@ class AdminSeeder extends Seeder
      */
     public function run(): void
     {
-        User::create([
+        User::firstOrCreate(['email' => 'admin@fichajes.com'], [
             'name' => 'Administrador',
-            'email' => 'admin@fichajes.com',
             'password' => bcrypt('admin123'),
             'pin' => '0000',
             'role' => 'admin',
+            'horas_diarias' => 8.0,
         ]);
     }
 }

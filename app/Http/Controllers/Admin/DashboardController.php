@@ -19,7 +19,7 @@ class DashboardController extends Controller
             ->take(10)
             ->get();
 
-        // Employees currently "in" (last fichaje today is entrada)
+        // Employees currently "in" (last fichaje today is entrada or reanudacion)
         $empleadosPresentes = User::where('role', 'empleado')
             ->whereHas('fichajes', function ($query) {
                 $query->whereDate('created_at', today());
@@ -30,11 +30,11 @@ class DashboardController extends Controller
                     ->whereDate('created_at', today())
                     ->latest()
                     ->first();
-                return $ultimo && $ultimo->tipo === 'entrada';
+                return $ultimo && in_array($ultimo->tipo, ['entrada', 'reanudacion']);
             })
             ->count();
 
-        // Total hours worked today by all employees
+        // Total hours worked today by all employees (respects pausa/reanudacion)
         $fichajesDeHoy = Fichaje::whereDate('created_at', today())
             ->orderBy('user_id')
             ->orderBy('created_at')
@@ -43,15 +43,7 @@ class DashboardController extends Controller
 
         $minutosHoy = 0;
         foreach ($fichajesDeHoy as $userFichajes) {
-            $entradaPendiente = null;
-            foreach ($userFichajes->sortBy('created_at') as $fichaje) {
-                if ($fichaje->tipo === 'entrada') {
-                    $entradaPendiente = $fichaje;
-                } elseif ($fichaje->tipo === 'salida' && $entradaPendiente) {
-                    $minutosHoy += $entradaPendiente->created_at->diffInMinutes($fichaje->created_at);
-                    $entradaPendiente = null;
-                }
-            }
+            $minutosHoy += $this->calcularMinutos($userFichajes->sortBy('created_at'));
         }
         $horasHoy = round($minutosHoy / 60, 1);
 
@@ -65,14 +57,7 @@ class DashboardController extends Controller
                 ->orderBy('user_id')->orderBy('created_at')->get()->groupBy('user_id');
             $minDia = 0;
             foreach ($fichajesDia as $uf) {
-                $ep = null;
-                foreach ($uf->sortBy('created_at') as $f) {
-                    if ($f->tipo === 'entrada') { $ep = $f; }
-                    elseif ($f->tipo === 'salida' && $ep) {
-                        $minDia += $ep->created_at->diffInMinutes($f->created_at);
-                        $ep = null;
-                    }
-                }
+                $minDia += $this->calcularMinutos($uf->sortBy('created_at'));
             }
             $chartHoras[] = round($minDia / 60, 1);
         }
@@ -85,14 +70,7 @@ class DashboardController extends Controller
         $empleadoEsperado = [];
         foreach ($empleados as $emp) {
             $fichajes = $emp->fichajes()->where('created_at', '>=', $inicioSemana)->orderBy('created_at')->get();
-            $ep = null; $min = 0;
-            foreach ($fichajes as $f) {
-                if ($f->tipo === 'entrada') { $ep = $f; }
-                elseif ($f->tipo === 'salida' && $ep) {
-                    $min += $ep->created_at->diffInMinutes($f->created_at);
-                    $ep = null;
-                }
-            }
+            $min = $this->calcularMinutos($fichajes);
             $empleadoLabels[] = explode(' ', $emp->name)[0];
             $empleadoHoras[] = round($min / 60, 1);
             $empleadoEsperado[] = round($emp->horas_diarias * max(now()->dayOfWeek ?: 7, 1), 1);
@@ -110,5 +88,20 @@ class DashboardController extends Controller
             'empleadoHoras',
             'empleadoEsperado'
         ));
+    }
+
+    private function calcularMinutos($fichajes): int
+    {
+        $minutos = 0;
+        $trabajandoDesde = null;
+        foreach ($fichajes as $f) {
+            if (in_array($f->tipo, ['entrada', 'reanudacion'])) {
+                $trabajandoDesde = $f->created_at;
+            } elseif (in_array($f->tipo, ['pausa', 'salida']) && $trabajandoDesde) {
+                $minutos += $trabajandoDesde->diffInMinutes($f->created_at);
+                $trabajandoDesde = null;
+            }
+        }
+        return $minutos;
     }
 }

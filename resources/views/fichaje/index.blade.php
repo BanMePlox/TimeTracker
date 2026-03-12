@@ -8,14 +8,6 @@
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes pulse-success {
-        0%, 100% { background-color: rgb(22, 163, 74); }
-        50% { background-color: rgb(21, 128, 61); }
-    }
-    @keyframes pulse-error {
-        0%, 100% { background-color: rgb(220, 38, 38); }
-        50% { background-color: rgb(185, 28, 28); }
-    }
     .fade-in-up { animation: fadeInUp 0.4s ease-out; }
     .key-btn:active { transform: scale(0.92); }
     .key-btn { transition: all 0.1s ease; }
@@ -39,22 +31,48 @@
         <p id="fecha" class="text-slate-400 text-sm"></p>
     </div>
 
-    <!-- Result Screen (shown after fichaje) -->
+    <!-- Result Screen -->
     @if(session('success'))
-    <div id="resultado" class="fixed inset-0 flex items-center justify-center z-50 {{ session('tipo') === 'entrada' ? 'bg-green-600' : 'bg-orange-500' }} fade-in-up">
+    @php
+        $tipo = session('tipo');
+        $bgColor = match($tipo) {
+            'entrada'     => 'bg-green-600',
+            'salida'      => 'bg-orange-500',
+            'pausa'       => 'bg-amber-500',
+            'reanudacion' => 'bg-blue-600',
+            default       => 'bg-slate-700',
+        };
+        $label = match($tipo) {
+            'entrada'     => 'ENTRADA',
+            'salida'      => 'SALIDA',
+            'pausa'       => 'PAUSA',
+            'reanudacion' => 'REANUDANDO',
+            default       => strtoupper($tipo),
+        };
+    @endphp
+    <div id="resultado" class="fixed inset-0 flex items-center justify-center z-50 {{ $bgColor }} fade-in-up">
         <div class="text-center text-white p-8">
             <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-white/20 mb-6">
-                @if(session('tipo') === 'entrada')
+                @if($tipo === 'entrada')
                     <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
                     </svg>
-                @else
+                @elseif($tipo === 'salida')
                     <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                     </svg>
+                @elseif($tipo === 'pausa')
+                    <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                @else
+                    <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
                 @endif
             </div>
-            <h2 class="text-4xl font-bold mb-2">{{ session('tipo') === 'entrada' ? 'ENTRADA' : 'SALIDA' }}</h2>
+            <h2 class="text-4xl font-bold mb-2">{{ $label }}</h2>
             <p class="text-2xl font-semibold mb-4">{{ session('nombre') }}</p>
             <p class="text-white/80 text-lg">{{ session('success') }}</p>
             <div class="mt-6">
@@ -99,10 +117,53 @@
                         : '0:' . str_pad(session('restantes'), 2, '0', STR_PAD_LEFT) }}
                 </p>
             </div>
-            <p class="text-gray-600 text-xs mt-6">El terminal se desbloqueará automáticamente.</p>
         </div>
     </div>
     @endif
+
+    <!-- Action Choice Screen (after PIN validated, state requires choice) -->
+    @if(session('pin_validado'))
+    <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 w-full max-w-sm shadow-2xl fade-in-up">
+        <div class="text-center mb-6">
+            <p class="text-white font-semibold text-lg">{{ session('user_nombre') }}</p>
+            <p class="text-slate-400 text-sm mt-1">
+                @if(session('estado_actual') === 'pausa')
+                    Estás en pausa. ¿Qué quieres hacer?
+                @else
+                    Estás dentro. ¿Qué quieres hacer?
+                @endif
+            </p>
+        </div>
+
+        <div class="space-y-3">
+            @foreach(session('acciones') as $accion)
+            <form action="{{ route('fichaje.store') }}" method="POST">
+                @csrf
+                <input type="hidden" name="pin" value="{{ session('pin_validado') }}">
+                <input type="hidden" name="tipo" value="{{ $accion }}">
+                <button type="submit" class="w-full py-4 rounded-2xl font-semibold text-lg transition-colors
+                    {{ $accion === 'salida'      ? 'bg-orange-500 hover:bg-orange-400 text-white' : '' }}
+                    {{ $accion === 'pausa'       ? 'bg-amber-500 hover:bg-amber-400 text-white' : '' }}
+                    {{ $accion === 'reanudacion' ? 'bg-blue-600 hover:bg-blue-500 text-white' : '' }}
+                ">
+                    {{ match($accion) {
+                        'salida'      => '↗ Registrar Salida',
+                        'pausa'       => '⏸ Iniciar Pausa',
+                        'reanudacion' => '▶ Reanudar',
+                        default       => ucfirst($accion),
+                    } }}
+                </button>
+            </form>
+            @endforeach
+        </div>
+
+        <div class="mt-6 text-center">
+            <a href="{{ route('fichaje.index') }}" class="text-slate-500 hover:text-slate-400 text-sm transition-colors">
+                ← Cancelar
+            </a>
+        </div>
+    </div>
+    @else
 
     <!-- PIN Card -->
     <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 w-full max-w-sm shadow-2xl fade-in-up">
@@ -110,18 +171,11 @@
 
         <!-- PIN Display -->
         <div class="flex justify-center gap-3 mb-8" id="pin-display">
-            <div class="pin-dot w-14 h-14 rounded-xl border-2 border-white/30 bg-white/5 flex items-center justify-center text-white text-2xl font-bold" data-index="0">
+            @foreach(range(0,3) as $i)
+            <div class="pin-dot w-14 h-14 rounded-xl border-2 border-white/30 bg-white/5 flex items-center justify-center text-white text-2xl font-bold" data-index="{{ $i }}">
                 <span class="dot-indicator w-3 h-3 rounded-full bg-white/30"></span>
             </div>
-            <div class="pin-dot w-14 h-14 rounded-xl border-2 border-white/30 bg-white/5 flex items-center justify-center text-white text-2xl font-bold" data-index="1">
-                <span class="dot-indicator w-3 h-3 rounded-full bg-white/30"></span>
-            </div>
-            <div class="pin-dot w-14 h-14 rounded-xl border-2 border-white/30 bg-white/5 flex items-center justify-center text-white text-2xl font-bold" data-index="2">
-                <span class="dot-indicator w-3 h-3 rounded-full bg-white/30"></span>
-            </div>
-            <div class="pin-dot w-14 h-14 rounded-xl border-2 border-white/30 bg-white/5 flex items-center justify-center text-white text-2xl font-bold" data-index="3">
-                <span class="dot-indicator w-3 h-3 rounded-full bg-white/30"></span>
-            </div>
+            @endforeach
         </div>
 
         <!-- Hidden form -->
@@ -139,7 +193,6 @@
             </button>
             @endforeach
 
-            <!-- Delete -->
             <button onclick="deleteDigit()"
                     class="key-btn h-16 bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 rounded-2xl text-red-300 flex items-center justify-center shadow-sm">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,13 +200,11 @@
                 </svg>
             </button>
 
-            <!-- 0 -->
             <button onclick="addDigit('0')"
                     class="key-btn h-16 bg-white/10 hover:bg-white/25 border border-white/20 rounded-2xl text-white text-2xl font-semibold shadow-sm">
                 0
             </button>
 
-            <!-- Submit -->
             <button onclick="submitPin()"
                     class="key-btn h-16 bg-blue-600 hover:bg-blue-500 border border-blue-500 rounded-2xl text-white flex items-center justify-center shadow-sm shadow-blue-500/30">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,13 +213,13 @@
             </button>
         </div>
 
-        <!-- Admin link -->
         <div class="mt-8 text-center">
             <a href="{{ route('admin.login') }}" class="text-slate-500 hover:text-slate-400 text-xs transition-colors">
                 Acceso administración
             </a>
         </div>
     </div>
+    @endif
 </div>
 @endsection
 
@@ -180,13 +231,12 @@
     // Clock
     function updateClock() {
         const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('reloj').textContent = `${hours}:${minutes}:${seconds}`;
-
-        const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const h = String(now.getHours()).padStart(2,'0');
+        const m = String(now.getMinutes()).padStart(2,'0');
+        const s = String(now.getSeconds()).padStart(2,'0');
+        document.getElementById('reloj').textContent = `${h}:${m}:${s}`;
+        const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
         document.getElementById('fecha').textContent = `${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]} de ${now.getFullYear()}`;
     }
     updateClock();
@@ -197,17 +247,17 @@
         dots.forEach((dot, i) => {
             dot.innerHTML = '';
             if (i < pin.length) {
-                dot.classList.remove('border-white/30', 'bg-white/5');
-                dot.classList.add('border-blue-400', 'bg-blue-500/20');
-                const bullet = document.createElement('div');
-                bullet.className = 'w-4 h-4 rounded-full bg-blue-400';
-                dot.appendChild(bullet);
+                dot.classList.remove('border-white/30','bg-white/5');
+                dot.classList.add('border-blue-400','bg-blue-500/20');
+                const b = document.createElement('div');
+                b.className = 'w-4 h-4 rounded-full bg-blue-400';
+                dot.appendChild(b);
             } else {
-                dot.classList.remove('border-blue-400', 'bg-blue-500/20');
-                dot.classList.add('border-white/30', 'bg-white/5');
-                const indicator = document.createElement('span');
-                indicator.className = 'dot-indicator w-3 h-3 rounded-full bg-white/30';
-                dot.appendChild(indicator);
+                dot.classList.remove('border-blue-400','bg-blue-500/20');
+                dot.classList.add('border-white/30','bg-white/5');
+                const s = document.createElement('span');
+                s.className = 'dot-indicator w-3 h-3 rounded-full bg-white/30';
+                dot.appendChild(s);
             }
         });
     }
@@ -216,19 +266,12 @@
         if (pin.length < MAX_LENGTH) {
             pin.push(digit);
             updateDisplay();
-
-            // Auto-submit when 4 digits entered
-            if (pin.length === MAX_LENGTH) {
-                setTimeout(() => submitPin(), 300);
-            }
+            if (pin.length === MAX_LENGTH) setTimeout(() => submitPin(), 300);
         }
     }
 
     function deleteDigit() {
-        if (pin.length > 0) {
-            pin.pop();
-            updateDisplay();
-        }
+        if (pin.length > 0) { pin.pop(); updateDisplay(); }
     }
 
     function submitPin() {
@@ -238,70 +281,49 @@
         }
     }
 
-    // QR auto-fill: if ?pin= param is present, auto-submit
+    // QR auto-fill
     (function() {
         const params = new URLSearchParams(window.location.search);
         const qrPin = params.get('pin');
-        if (qrPin && /^\d{4}$/.test(qrPin)) {
-            qrPin.split('').forEach(d => addDigit(d));
-        }
+        if (qrPin && /^\d{4}$/.test(qrPin)) qrPin.split('').forEach(d => addDigit(d));
     })();
 
     // Keyboard support
     document.addEventListener('keydown', function(e) {
-        if (e.key >= '0' && e.key <= '9') {
-            addDigit(e.key);
-        } else if (e.key === 'Backspace') {
-            deleteDigit();
-        } else if (e.key === 'Enter') {
-            submitPin();
-        }
+        if (e.key >= '0' && e.key <= '9') addDigit(e.key);
+        else if (e.key === 'Backspace') deleteDigit();
+        else if (e.key === 'Enter') submitPin();
     });
 
     // Auto-close result screen
     @if(session('success'))
     let countdown = 3;
-    const countdownEl = document.getElementById('countdown');
-    const timer = setInterval(() => {
+    const cEl = document.getElementById('countdown');
+    const t = setInterval(() => {
         countdown--;
-        if (countdownEl) countdownEl.textContent = countdown;
-        if (countdown <= 0) {
-            clearInterval(timer);
-            document.getElementById('resultado').style.display = 'none';
-        }
+        if (cEl) cEl.textContent = countdown;
+        if (countdown <= 0) { clearInterval(t); document.getElementById('resultado').style.display = 'none'; }
     }, 1000);
     @endif
 
     @if(session('bloqueado'))
     let bloqueoRestantes = {{ session('restantes') }};
-    const bloqueoEl = document.getElementById('bloqueo-countdown');
-
-    function formatBloqueo(s) {
-        const m = Math.floor(s / 60);
-        const sec = s % 60;
-        return m + ':' + String(sec).padStart(2, '0');
-    }
-
-    const bloqueoTimer = setInterval(() => {
+    const bEl = document.getElementById('bloqueo-countdown');
+    function fmt(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+    const bt = setInterval(() => {
         bloqueoRestantes--;
-        if (bloqueoEl) bloqueoEl.textContent = formatBloqueo(bloqueoRestantes);
-        if (bloqueoRestantes <= 0) {
-            clearInterval(bloqueoTimer);
-            document.getElementById('bloqueo-screen').style.display = 'none';
-        }
+        if (bEl) bEl.textContent = fmt(bloqueoRestantes);
+        if (bloqueoRestantes <= 0) { clearInterval(bt); document.getElementById('bloqueo-screen').style.display = 'none'; }
     }, 1000);
     @endif
 
     @if(session('error'))
-    let countdownErr = 3;
-    const countdownErrEl = document.getElementById('countdown-error');
-    const timerErr = setInterval(() => {
-        countdownErr--;
-        if (countdownErrEl) countdownErrEl.textContent = countdownErr;
-        if (countdownErr <= 0) {
-            clearInterval(timerErr);
-            document.getElementById('error-screen').style.display = 'none';
-        }
+    let cErr = 3;
+    const eEl = document.getElementById('countdown-error');
+    const et = setInterval(() => {
+        cErr--;
+        if (eEl) eEl.textContent = cErr;
+        if (cErr <= 0) { clearInterval(et); document.getElementById('error-screen').style.display = 'none'; }
     }, 1000);
     @endif
 </script>

@@ -1,0 +1,643 @@
+openapi: 3.0.3
+info:
+  title: TimeTrack API
+  description: |
+    API REST para el sistema de gestión de fichajes TimeTrack.
+
+    ## Autenticación
+    La mayoría de endpoints requieren autenticación mediante **Laravel Sanctum** (Bearer Token).
+    Obtén tu token en `POST /api/auth/login`.
+
+    ## Endpoint público
+    El fichaje por PIN (`POST /api/fichaje`) es el único endpoint público, diseñado para terminales físicos.
+  version: 1.0.0
+  contact:
+    name: TimeTrack
+servers:
+  - url: /api
+    description: API principal
+
+tags:
+  - name: Autenticación
+    description: Login, logout y perfil del usuario
+  - name: Fichaje público
+    description: Fichaje por PIN (terminal público)
+  - name: Usuarios
+    description: Gestión de empleados (solo admins)
+  - name: Fichajes
+    description: Consulta y gestión de fichajes
+  - name: Presencia
+    description: Estado de presencia en tiempo real
+  - name: Ausencias
+    description: Gestión de ausencias y vacaciones
+  - name: Log de actividad
+    description: Registro de acciones del sistema
+
+paths:
+  /fichaje:
+    post:
+      tags: [Fichaje público]
+      summary: Registrar fichaje por PIN
+      description: Endpoint público para registrar entrada/salida mediante PIN de 4 dígitos. No requiere autenticación.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin:
+                  type: string
+                  pattern: '^\d{4}$'
+                  example: "1234"
+      responses:
+        '200':
+          description: Fichaje registrado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Entrada registrada. Bienvenido, Ana García."
+                  tipo:
+                    type: string
+                    enum: [entrada, salida, pausa, reanudacion]
+                  usuario:
+                    type: string
+                    example: "Ana García López"
+        '401':
+          description: PIN incorrecto
+        '422':
+          description: Formato de PIN inválido
+        '429':
+          description: Terminal bloqueado por exceso de intentos
+
+  /auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión
+      description: Autentica un administrador y devuelve un Bearer Token para usar en el resto de endpoints.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@fichajes.com
+                password:
+                  type: string
+                  example: admin123
+      responses:
+        '200':
+          description: Login correcto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: "1|abc123..."
+                  user:
+                    $ref: '#/components/schemas/Usuario'
+        '401':
+          description: Credenciales incorrectas
+        '422':
+          description: Datos de validación incorrectos
+
+  /auth/logout:
+    post:
+      tags: [Autenticación]
+      summary: Cerrar sesión
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sesión cerrada correctamente
+
+  /auth/me:
+    get:
+      tags: [Autenticación]
+      summary: Perfil del usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Datos del usuario autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+
+  /usuarios:
+    get:
+      tags: [Usuarios]
+      summary: Listar empleados
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        '200':
+          description: Lista paginada de empleados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsuarios'
+    post:
+      tags: [Usuarios]
+      summary: Crear empleado
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioInput'
+      responses:
+        '201':
+          description: Empleado creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '422':
+          description: Errores de validación
+
+  /usuarios/{id}:
+    get:
+      tags: [Usuarios]
+      summary: Ver empleado
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Datos del empleado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '404':
+          description: Empleado no encontrado
+    put:
+      tags: [Usuarios]
+      summary: Actualizar empleado
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioInput'
+      responses:
+        '200':
+          description: Empleado actualizado
+        '404':
+          description: Empleado no encontrado
+    delete:
+      tags: [Usuarios]
+      summary: Eliminar empleado
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Empleado eliminado
+        '404':
+          description: Empleado no encontrado
+
+  /fichajes:
+    get:
+      tags: [Fichajes]
+      summary: Listar fichajes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          schema: { type: integer }
+          description: Filtrar por empleado
+        - name: fecha_desde
+          in: query
+          schema: { type: string, format: date }
+          example: "2026-03-01"
+        - name: fecha_hasta
+          in: query
+          schema: { type: string, format: date }
+          example: "2026-03-31"
+        - name: tipo
+          in: query
+          schema:
+            type: string
+            enum: [entrada, salida, pausa, reanudacion]
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        '200':
+          description: Lista paginada de fichajes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFichajes'
+
+  /fichajes/{id}:
+    get:
+      tags: [Fichajes]
+      summary: Ver fichaje
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Datos del fichaje
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fichaje'
+    put:
+      tags: [Fichajes]
+      summary: Actualizar fichaje
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tipo:
+                  type: string
+                  enum: [entrada, salida, pausa, reanudacion]
+                created_at:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Fichaje actualizado
+    delete:
+      tags: [Fichajes]
+      summary: Eliminar fichaje
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Fichaje eliminado
+
+  /presencia:
+    get:
+      tags: [Presencia]
+      summary: Estado de presencia actual
+      description: Devuelve qué empleados están actualmente dentro de la empresa (último fichaje del día es entrada o reanudacion).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de empleados con su estado de presencia
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  empleados:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        estado:
+                          type: string
+                          enum: [dentro, fuera, pausa]
+                        ultimo_fichaje:
+                          $ref: '#/components/schemas/Fichaje'
+
+  /ausencias:
+    get:
+      tags: [Ausencias]
+      summary: Listar ausencias
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          schema: { type: integer }
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [pendiente, aprobada, rechazada]
+        - name: tipo
+          in: query
+          schema:
+            type: string
+            enum: [vacaciones, baja_medica, ausencia_justificada, ausencia_injustificada]
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        '200':
+          description: Lista paginada de ausencias
+    post:
+      tags: [Ausencias]
+      summary: Crear ausencia
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AusenciaInput'
+      responses:
+        '201':
+          description: Ausencia creada
+        '422':
+          description: Errores de validación (incluye solapamiento de fechas)
+
+  /ausencias/{id}:
+    get:
+      tags: [Ausencias]
+      summary: Ver ausencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Datos de la ausencia
+    put:
+      tags: [Ausencias]
+      summary: Actualizar ausencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AusenciaInput'
+      responses:
+        '200':
+          description: Ausencia actualizada
+    delete:
+      tags: [Ausencias]
+      summary: Eliminar ausencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204':
+          description: Ausencia eliminada
+
+  /ausencias/{id}/aprobar:
+    post:
+      tags: [Ausencias]
+      summary: Aprobar ausencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Ausencia aprobada
+
+  /ausencias/{id}/rechazar:
+    post:
+      tags: [Ausencias]
+      summary: Rechazar ausencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Ausencia rechazada
+
+  /activity-log:
+    get:
+      tags: [Log de actividad]
+      summary: Ver log de actividad
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        '200':
+          description: Registro de acciones del sistema
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Usuario:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "Ana García López"
+        email:
+          type: string
+          format: email
+          example: "ana@timetrack.test"
+        role:
+          type: string
+          enum: [admin, empleado]
+        horas_diarias:
+          type: number
+          format: float
+          example: 8.0
+        created_at:
+          type: string
+          format: date-time
+
+    UsuarioInput:
+      type: object
+      required: [name, email, password, pin, horas_diarias]
+      properties:
+        name:
+          type: string
+          example: "Ana García López"
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        pin:
+          type: string
+          pattern: '^\d{4}$'
+          example: "1234"
+        horas_diarias:
+          type: number
+          minimum: 1
+          maximum: 24
+          example: 8.0
+
+    Fichaje:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        tipo:
+          type: string
+          enum: [entrada, salida, pausa, reanudacion]
+        created_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/Usuario'
+
+    Ausencia:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        tipo:
+          type: string
+          enum: [vacaciones, baja_medica, ausencia_justificada, ausencia_injustificada]
+        fecha_inicio:
+          type: string
+          format: date
+        fecha_fin:
+          type: string
+          format: date
+        dias:
+          type: integer
+          readOnly: true
+        descripcion:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          enum: [pendiente, aprobada, rechazada]
+        user:
+          $ref: '#/components/schemas/Usuario'
+
+    AusenciaInput:
+      type: object
+      required: [user_id, tipo, fecha_inicio, fecha_fin, estado]
+      properties:
+        user_id:
+          type: integer
+        tipo:
+          type: string
+          enum: [vacaciones, baja_medica, ausencia_justificada, ausencia_injustificada]
+        fecha_inicio:
+          type: string
+          format: date
+        fecha_fin:
+          type: string
+          format: date
+        descripcion:
+          type: string
+          nullable: true
+        estado:
+          type: string
+          enum: [pendiente, aprobada, rechazada]
+
+    PaginatedUsuarios:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Usuario'
+        current_page:
+          type: integer
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+
+    PaginatedFichajes:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fichaje'
+        current_page:
+          type: integer
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer

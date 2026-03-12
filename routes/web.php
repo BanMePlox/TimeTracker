@@ -5,6 +5,7 @@ use App\Http\Controllers\FichajeController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Admin\AusenciaController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\FestivoController;
 use App\Http\Controllers\Admin\FichajeController as AdminFichajeController;
 use App\Http\Controllers\Admin\InformeController;
 use App\Http\Controllers\Admin\ActivityLogController;
@@ -18,6 +19,9 @@ use App\Http\Controllers\Empleado\AusenciaController as EmpleadoAusenciaControll
 // Public - Fichaje by PIN
 Route::get('/', [FichajeController::class, 'index'])->name('fichaje.index');
 Route::post('/fichaje', [FichajeController::class, 'store'])->name('fichaje.store');
+
+// Public - API Docs
+Route::get('/api/docs', fn() => view('api.docs'))->name('api.docs');
 
 // Empleado auth
 Route::get('/empleado/login', [EmpleadoAuthController::class, 'showLogin'])->name('empleado.login');
@@ -64,8 +68,15 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->name('admin.')->group(fun
     // Log de actividad (solo lectura)
     Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');
 
-    // Ausencias
+    // Ausencias + Calendario
+    Route::get('ausencias/calendario', [AusenciaController::class, 'calendario'])->name('ausencias.calendario');
     Route::resource('ausencias', AusenciaController::class);
     Route::post('ausencias/{ausencia}/aprobar', [AusenciaController::class, 'aprobar'])->name('ausencias.aprobar');
     Route::post('ausencias/{ausencia}/rechazar', [AusenciaController::class, 'rechazar'])->name('ausencias.rechazar');
+
+    // Festivos
+    Route::get('festivos', [FestivoController::class, 'index'])->name('festivos.index');
+    Route::get('festivos/create', [FestivoController::class, 'create'])->name('festivos.create');
+    Route::post('festivos', [FestivoController::class, 'store'])->name('festivos.store');
+    Route::delete('festivos/{festivo}', [FestivoController::class, 'destroy'])->name('festivos.destroy');
 });

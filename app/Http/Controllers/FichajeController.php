@@ -10,8 +10,11 @@ use Illuminate\Support\Facades\Cache;
 class FichajeController extends Controller
 {
     private const MAX_INTENTOS  = 5;
-    private const BLOQUEO_1     = 60;       // segundos (1er bloqueo)
-    private const BLOQUEO_2     = 300;      // segundos (2º bloqueo)
+    private const BLOQUEO_1     = 60;
+    private const BLOQUEO_2     = 300;
+
+    // Tipos que indican que el empleado está trabajando (no en pausa)
+    private const TIPOS_DENTRO  = ['entrada', 'reanudacion'];
 
     public function index()
     {
@@ -25,19 +28,15 @@ class FichajeController extends Controller
         $ip          = $request->ip();
         $keyLock     = "pin_lock_{$ip}";
         $keyIntentos = "pin_intentos_{$ip}";
-        $keyNivel    = "pin_nivel_{$ip}";   // 0 = ninguno, 1 = primer bloqueo ya usado
+        $keyNivel    = "pin_nivel_{$ip}";
 
-        // ── Comprobar si está bloqueado ────────────────────────────────────────
+        // ── Comprobar bloqueo ──────────────────────────────────────────────────
         $bloqueadoHasta = Cache::get($keyLock);
         if ($bloqueadoHasta) {
             $restantes = $bloqueadoHasta - now()->timestamp;
             if ($restantes > 0) {
-                return back()->with([
-                    'bloqueado'  => true,
-                    'restantes'  => $restantes,
-                ]);
+                return back()->with(['bloqueado' => true, 'restantes' => $restantes]);
             }
-            // El tiempo de bloqueo ya expiró, limpiar la clave
             Cache::forget($keyLock);
         }
 
@@ -50,20 +49,13 @@ class FichajeController extends Controller
             if ($intentos >= self::MAX_INTENTOS) {
                 $nivel    = Cache::get($keyNivel, 0);
                 $duracion = ($nivel === 0) ? self::BLOQUEO_1 : self::BLOQUEO_2;
-                $nuevoNivel = ($nivel === 0) ? 1 : 0;   // alterna: 2º bloqueo resetea el ciclo
-
                 Cache::put($keyLock, now()->timestamp + $duracion, $duracion + 10);
-                Cache::put($keyNivel, $nuevoNivel, 3600);
+                Cache::put($keyNivel, ($nivel === 0) ? 1 : 0, 3600);
                 Cache::forget($keyIntentos);
-
-                return back()->with([
-                    'bloqueado'  => true,
-                    'restantes'  => $duracion,
-                ]);
+                return back()->with(['bloqueado' => true, 'restantes' => $duracion]);
             }
 
-            Cache::put($keyIntentos, $intentos, 600);   // expira en 10 min sin actividad
-
+            Cache::put($keyIntentos, $intentos, 600);
             $restantes = self::MAX_INTENTOS - $intentos;
             return back()->with('error', "PIN incorrecto. {$restantes} " . ($restantes === 1 ? 'intento restante.' : 'intentos restantes.'));
         }
@@ -72,23 +64,58 @@ class FichajeController extends Controller
         Cache::forget($keyIntentos);
         Cache::forget($keyNivel);
 
+        // ── Determinar estado actual ───────────────────────────────────────────
         $ultimoFichaje = Fichaje::where('user_id', $user->id)
             ->whereDate('created_at', today())
             ->latest()
             ->first();
 
-        $tipo = (!$ultimoFichaje || $ultimoFichaje->tipo === 'salida') ? 'entrada' : 'salida';
+        $estadoActual = $ultimoFichaje ? $ultimoFichaje->tipo : null;
 
-        Fichaje::create(['user_id' => $user->id, 'tipo' => $tipo]);
+        // ── Si se envía acción específica (segunda parte del flujo) ────────────
+        $tipoSolicitado = $request->input('tipo');
+        $tiposValidos   = ['entrada', 'salida', 'pausa', 'reanudacion'];
 
-        $mensaje = $tipo === 'entrada'
-            ? "¡Bienvenido, {$user->name}! Entrada registrada."
-            : "¡Hasta pronto, {$user->name}! Salida registrada.";
+        if ($tipoSolicitado && in_array($tipoSolicitado, $tiposValidos)) {
+            Fichaje::create(['user_id' => $user->id, 'tipo' => $tipoSolicitado]);
+            return $this->respuestaExito($user->name, $tipoSolicitado);
+        }
+
+        // ── Auto-acción si el estado es claro (fuera → entrada) ───────────────
+        if (!$estadoActual || $estadoActual === 'salida') {
+            Fichaje::create(['user_id' => $user->id, 'tipo' => 'entrada']);
+            return $this->respuestaExito($user->name, 'entrada');
+        }
+
+        // ── Estado requiere elección: dentro o en pausa ───────────────────────
+        if (in_array($estadoActual, self::TIPOS_DENTRO)) {
+            $acciones = ['pausa', 'salida'];
+        } else {
+            // 'pausa'
+            $acciones = ['reanudacion', 'salida'];
+        }
 
         return back()->with([
-            'success' => $mensaje,
+            'pin_validado' => $request->pin,
+            'user_nombre'  => $user->name,
+            'acciones'     => $acciones,
+            'estado_actual' => $estadoActual,
+        ]);
+    }
+
+    private function respuestaExito(string $nombre, string $tipo)
+    {
+        $mensajes = [
+            'entrada'      => "¡Bienvenido, {$nombre}! Entrada registrada.",
+            'salida'       => "¡Hasta pronto, {$nombre}! Salida registrada.",
+            'pausa'        => "Pausa registrada, {$nombre}.",
+            'reanudacion'  => "¡Reanudando, {$nombre}!",
+        ];
+
+        return back()->with([
+            'success' => $mensajes[$tipo] ?? "Fichaje registrado.",
             'tipo'    => $tipo,
-            'nombre'  => $user->name,
+            'nombre'  => $nombre,
         ]);
     }
 }

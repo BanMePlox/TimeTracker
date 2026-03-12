@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Ausencia;
+use App\Models\Festivo;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class AusenciaController extends Controller
@@ -140,5 +142,52 @@ class AusenciaController extends Controller
         $ausencia->update(['estado' => 'rechazada']);
         ActivityLog::registrar('ausencia_rechazada', "Ausencia #{$ausencia->id} de {$ausencia->user->name} rechazada", 'Ausencia', $ausencia->id);
         return back()->with('success', 'Ausencia rechazada correctamente.');
+    }
+
+    public function calendario(Request $request)
+    {
+        $mes  = $request->integer('mes', now()->month);
+        $anio = $request->integer('anio', now()->year);
+
+        // Clamp values
+        $mes  = max(1, min(12, $mes));
+        $anio = max(2020, min(2030, $anio));
+
+        $inicio = Carbon::createFromDate($anio, $mes, 1)->startOfMonth();
+        $fin    = $inicio->copy()->endOfMonth();
+
+        // All approved absences that overlap this month
+        $ausencias = Ausencia::with('user')
+            ->where('estado', 'aprobada')
+            ->where('fecha_inicio', '<=', $fin)
+            ->where('fecha_fin', '>=', $inicio)
+            ->get();
+
+        // Festivos this month
+        $festivosMes = Festivo::whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->get()
+            ->keyBy(fn($f) => $f->fecha->format('Y-m-d'));
+
+        // Build day-by-day map
+        $dias = [];
+        for ($day = $inicio->copy(); $day->lte($fin); $day->addDay()) {
+            $fecha = $day->format('Y-m-d');
+            $dias[$fecha] = [
+                'numero'    => $day->day,
+                'diaSemana' => $day->dayOfWeek, // 0=Dom, 6=Sab
+                'ausencias' => $ausencias->filter(
+                    fn($a) => $a->fecha_inicio->lte($day) && $a->fecha_fin->gte($day)
+                )->values(),
+                'festivo'   => $festivosMes->get($fecha),
+            ];
+        }
+
+        // Navigation
+        $prevMes  = $inicio->copy()->subMonth();
+        $nextMes  = $inicio->copy()->addMonth();
+
+        return view('admin.ausencias.calendario', compact(
+            'dias', 'mes', 'anio', 'inicio', 'prevMes', 'nextMes'
+        ));
     }
 }

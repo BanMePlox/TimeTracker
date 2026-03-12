@@ -15,7 +15,7 @@ class DashboardController extends Controller
 
         // Today's status
         $ultimoFichaje = $user->fichajes()->whereDate('created_at', today())->latest()->first();
-        $dentroAhora   = $ultimoFichaje && $ultimoFichaje->tipo === 'entrada';
+        $dentroAhora   = $ultimoFichaje && in_array($ultimoFichaje->tipo, ['entrada', 'reanudacion']);
 
         // Hours this week
         $inicioSemana = Carbon::now()->startOfWeek();
@@ -52,12 +52,13 @@ class DashboardController extends Controller
     private function calcularMinutos($fichajes): int
     {
         $minutos = 0;
-        $ep = null;
+        $trabajandoDesde = null;
         foreach ($fichajes as $f) {
-            if ($f->tipo === 'entrada') { $ep = $f; }
-            elseif ($f->tipo === 'salida' && $ep) {
-                $minutos += $ep->created_at->diffInMinutes($f->created_at);
-                $ep = null;
+            if (in_array($f->tipo, ['entrada', 'reanudacion'])) {
+                $trabajandoDesde = $f->created_at;
+            } elseif (in_array($f->tipo, ['pausa', 'salida']) && $trabajandoDesde) {
+                $minutos += $trabajandoDesde->diffInMinutes($f->created_at);
+                $trabajandoDesde = null;
             }
         }
         return $minutos;
