@@ -10,10 +10,28 @@ use App\Http\Controllers\Admin\InformeController;
 use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\PresenciaController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Empleado\AuthController as EmpleadoAuthController;
+use App\Http\Controllers\Empleado\DashboardController as EmpleadoDashboardController;
+use App\Http\Controllers\Empleado\FichajeController as EmpleadoFichajeController;
+use App\Http\Controllers\Empleado\AusenciaController as EmpleadoAusenciaController;
 
 // Public - Fichaje by PIN
 Route::get('/', [FichajeController::class, 'index'])->name('fichaje.index');
 Route::post('/fichaje', [FichajeController::class, 'store'])->name('fichaje.store');
+
+// Empleado auth
+Route::get('/empleado/login', [EmpleadoAuthController::class, 'showLogin'])->name('empleado.login');
+Route::post('/empleado/login', [EmpleadoAuthController::class, 'login'])->name('empleado.login.post');
+Route::post('/empleado/logout', [EmpleadoAuthController::class, 'logout'])->name('empleado.logout');
+
+// Empleado protected routes
+Route::prefix('empleado')->middleware('empleado')->name('empleado.')->group(function () {
+    Route::get('/', [EmpleadoDashboardController::class, 'index'])->name('dashboard');
+    Route::get('fichajes', [EmpleadoFichajeController::class, 'index'])->name('fichajes.index');
+    Route::get('ausencias', [EmpleadoAusenciaController::class, 'index'])->name('ausencias.index');
+    Route::get('ausencias/create', [EmpleadoAusenciaController::class, 'create'])->name('ausencias.create');
+    Route::post('ausencias', [EmpleadoAusenciaController::class, 'store'])->name('ausencias.store');
+});
 
 // Admin auth
 Route::get('/admin/login', [AuthController::class, 'showLogin'])->name('admin.login');
@@ -41,6 +59,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->name('admin.')->group(fun
     // Informes
     Route::get('informes', [InformeController::class, 'index'])->name('informes.index');
     Route::get('informes/export', [InformeController::class, 'export'])->name('informes.export');
+    Route::get('informes/pdf', [InformeController::class, 'pdf'])->name('informes.pdf');
 
     // Log de actividad (solo lectura)
     Route::get('activity-log', [ActivityLogController::class, 'index'])->name('activity-log.index');

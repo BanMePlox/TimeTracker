@@ -122,6 +122,52 @@ class InformeController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
+    public function pdf(Request $request)
+    {
+        $usuarios = User::where('role', 'empleado')->orderBy('name')->get();
+
+        $mes    = (int) ($request->mes  ?? now()->month);
+        $anio   = (int) ($request->anio ?? now()->year);
+        $userId = $request->user_id;
+
+        $desde = Carbon::create($anio, $mes, 1)->startOfDay();
+        $hasta = $desde->copy()->endOfMonth();
+
+        $query = Fichaje::with('user')->orderBy('created_at');
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+        $query->whereBetween('created_at', [$desde, $hasta]);
+        $fichajes = $query->get();
+
+        $fichajesPorUsuario = $fichajes->groupBy('user_id');
+        $resumen = [];
+
+        foreach ($fichajesPorUsuario as $uid => $userFichajes) {
+            $usuario = $userFichajes->first()->user;
+            $fichajesPorDia = $userFichajes->groupBy(fn($f) => $f->created_at->format('Y-m-d'));
+            $dias = [];
+            $totalMinutos = 0;
+            foreach ($fichajesPorDia as $fecha => $fDia) {
+                $sesiones = $this->calcularHoras($fDia);
+                $minDia = (int) collect($sesiones)->sum('minutos');
+                $totalMinutos += $minDia;
+                $dias[$fecha] = ['sesiones' => $sesiones, 'minutos' => $minDia];
+            }
+            ksort($dias);
+            $resumen[] = [
+                'usuario'       => $usuario,
+                'dias'          => $dias,
+                'total_minutos' => $totalMinutos,
+                'total_horas'   => round($totalMinutos / 60, 2),
+            ];
+        }
+
+        $mesNombre = Carbon::create($anio, $mes, 1)->locale('es')->monthName;
+
+        return view('admin.informes.pdf', compact('resumen', 'usuarios', 'mes', 'anio', 'mesNombre', 'userId'));
+    }
+
     private function calcularHoras($fichajes)
     {
         $sesiones = [];

@@ -123,6 +123,18 @@
     </div>
 </div>
 
+<!-- Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 mb-6">
+    <div class="dm-card bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 class="dm-title text-base font-semibold text-gray-900 mb-4">Horas totales — últimos 7 días</h3>
+        <canvas id="chartDias" height="120"></canvas>
+    </div>
+    <div class="dm-card bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h3 class="dm-title text-base font-semibold text-gray-900 mb-4">Horas por empleado — esta semana</h3>
+        <canvas id="chartEmpleados" height="120"></canvas>
+    </div>
+</div>
+
 <!-- Quick Actions -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
     <a href="{{ route('admin.users.create') }}"
@@ -152,3 +164,84 @@
     </a>
 </div>
 @endsection
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const isDark = () => document.documentElement.classList.contains('dark');
+const gridColor = () => isDark() ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+const textColor = () => isDark() ? '#94a3b8' : '#6b7280';
+
+// Chart 1: hours per day (last 7 days)
+const ctxDias = document.getElementById('chartDias').getContext('2d');
+const chartDias = new Chart(ctxDias, {
+    type: 'bar',
+    data: {
+        labels: @json($chartLabels),
+        datasets: [{
+            label: 'Horas',
+            data: @json($chartHoras),
+            backgroundColor: 'rgba(59,130,246,0.7)',
+            borderColor: 'rgba(59,130,246,1)',
+            borderWidth: 1,
+            borderRadius: 6,
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { beginAtZero: true, grid: { color: gridColor() }, ticks: { color: textColor() } },
+            x: { grid: { display: false }, ticks: { color: textColor() } }
+        }
+    }
+});
+
+// Chart 2: hours per employee this week (actual vs expected)
+const ctxEmp = document.getElementById('chartEmpleados').getContext('2d');
+const chartEmp = new Chart(ctxEmp, {
+    type: 'bar',
+    data: {
+        labels: @json($empleadoLabels),
+        datasets: [
+            {
+                label: 'Trabajadas',
+                data: @json($empleadoHoras),
+                backgroundColor: 'rgba(16,185,129,0.7)',
+                borderColor: 'rgba(16,185,129,1)',
+                borderWidth: 1,
+                borderRadius: 6,
+            },
+            {
+                label: 'Esperadas',
+                data: @json($empleadoEsperado),
+                backgroundColor: 'rgba(203,213,225,0.5)',
+                borderColor: 'rgba(148,163,184,0.8)',
+                borderWidth: 1,
+                borderRadius: 6,
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: textColor() } } },
+        scales: {
+            y: { beginAtZero: true, grid: { color: gridColor() }, ticks: { color: textColor() } },
+            x: { grid: { display: false }, ticks: { color: textColor() } }
+        }
+    }
+});
+
+// Update chart colors when dark mode toggles
+const origToggle = window.toggleTheme;
+window.toggleTheme = function() {
+    origToggle();
+    [chartDias, chartEmp].forEach(c => {
+        c.options.scales.y.grid.color = gridColor();
+        c.options.scales.y.ticks.color = textColor();
+        c.options.scales.x.ticks.color = textColor();
+        c.update();
+    });
+};
+</script>
+@endpush
