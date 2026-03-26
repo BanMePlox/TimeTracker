@@ -52,6 +52,13 @@
             <p class="text-gray-500 text-sm">{{ count($informe) }} sesiones encontradas</p>
         </div>
         <div class="flex gap-2">
+            <a href="{{ route('admin.informes.resumen') }}"
+               class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Resumen mensual
+            </a>
             <a href="{{ route('admin.informes.pdf') }}?{{ http_build_query(request()->only(['user_id'])) }}"
                target="_blank"
                class="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl text-sm transition-colors">

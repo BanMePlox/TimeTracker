@@ -63,6 +63,31 @@
     </div>
 </div>
 
+<!-- Alert: employees without clock-out for > 1h -->
+@if($sinSalida->isNotEmpty())
+<div class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+    <div class="flex items-start gap-3">
+        <svg class="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <div class="flex-1">
+            <p class="text-amber-800 font-semibold text-sm mb-2">
+                {{ $sinSalida->count() }} {{ $sinSalida->count() === 1 ? 'empleado lleva' : 'empleados llevan' }} más de 1 hora sin fichar salida
+            </p>
+            <div class="flex flex-wrap gap-2">
+                @foreach($sinSalida as $emp)
+                <span class="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-medium px-3 py-1 rounded-full">
+                    <span>{{ $emp['name'] }}</span>
+                    <span class="text-amber-500">·</span>
+                    <span>entró {{ $emp['desde'] }} · +{{ floor($emp['exceso'] / 60) }}h {{ $emp['exceso'] % 60 }}min extra</span>
+                </span>
+                @endforeach
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 <!-- Recent Fichajes -->
 <div class="dm-card bg-white rounded-2xl shadow-sm border border-gray-100">
     <div class="dm-border p-6 border-b border-gray-100 flex items-center justify-between">
@@ -127,11 +152,11 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 mb-6">
     <div class="dm-card bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h3 class="dm-title text-base font-semibold text-gray-900 mb-4">Horas totales — últimos 7 días</h3>
-        <canvas id="chartDias" height="120"></canvas>
+        <div id="chartDias"></div>
     </div>
     <div class="dm-card bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h3 class="dm-title text-base font-semibold text-gray-900 mb-4">Horas por empleado — esta semana</h3>
-        <canvas id="chartEmpleados" height="120"></canvas>
+        <div id="chartEmpleados"></div>
     </div>
 </div>
 
@@ -166,82 +191,89 @@
 @endsection
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.0/dist/apexcharts.min.js"></script>
 <script>
 const isDark = () => document.documentElement.classList.contains('dark');
-const gridColor = () => isDark() ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
-const textColor = () => isDark() ? '#94a3b8' : '#6b7280';
 
-// Chart 1: hours per day (last 7 days)
-const ctxDias = document.getElementById('chartDias').getContext('2d');
-const chartDias = new Chart(ctxDias, {
-    type: 'bar',
-    data: {
-        labels: @json($chartLabels),
-        datasets: [{
-            label: 'Horas',
-            data: @json($chartHoras),
-            backgroundColor: 'rgba(59,130,246,0.7)',
-            borderColor: 'rgba(59,130,246,1)',
-            borderWidth: 1,
-            borderRadius: 6,
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-            y: { beginAtZero: true, grid: { color: gridColor() }, ticks: { color: textColor() } },
-            x: { grid: { display: false }, ticks: { color: textColor() } }
-        }
-    }
-});
+function diasOptions(dark) {
+    return {
+        series: [{ name: 'Horas', data: @json($chartHoras) }],
+        chart: {
+            type: 'bar',
+            height: 220,
+            toolbar: { show: false },
+            background: 'transparent',
+            foreColor: dark ? '#94a3b8' : '#6b7280',
+            animations: { enabled: true, easing: 'easeinout', speed: 600 },
+        },
+        theme: { mode: dark ? 'dark' : 'light' },
+        plotOptions: {
+            bar: { borderRadius: 6, columnWidth: '55%' }
+        },
+        dataLabels: { enabled: false },
+        colors: ['#3b82f6'],
+        xaxis: {
+            categories: @json($chartLabels),
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+        },
+        yaxis: { min: 0, labels: { formatter: v => v + 'h' } },
+        grid: {
+            borderColor: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+            xaxis: { lines: { show: false } },
+        },
+        tooltip: { y: { formatter: v => v + 'h' } },
+        legend: { show: false },
+    };
+}
 
-// Chart 2: hours per employee this week (actual vs expected)
-const ctxEmp = document.getElementById('chartEmpleados').getContext('2d');
-const chartEmp = new Chart(ctxEmp, {
-    type: 'bar',
-    data: {
-        labels: @json($empleadoLabels),
-        datasets: [
-            {
-                label: 'Trabajadas',
-                data: @json($empleadoHoras),
-                backgroundColor: 'rgba(16,185,129,0.7)',
-                borderColor: 'rgba(16,185,129,1)',
-                borderWidth: 1,
-                borderRadius: 6,
-            },
-            {
-                label: 'Esperadas',
-                data: @json($empleadoEsperado),
-                backgroundColor: 'rgba(203,213,225,0.5)',
-                borderColor: 'rgba(148,163,184,0.8)',
-                borderWidth: 1,
-                borderRadius: 6,
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        plugins: { legend: { labels: { color: textColor() } } },
-        scales: {
-            y: { beginAtZero: true, grid: { color: gridColor() }, ticks: { color: textColor() } },
-            x: { grid: { display: false }, ticks: { color: textColor() } }
-        }
-    }
-});
+function empleadosOptions(dark) {
+    return {
+        series: [
+            { name: 'Trabajadas', data: @json($empleadoHoras) },
+            { name: 'Esperadas',  data: @json($empleadoEsperado) },
+        ],
+        chart: {
+            type: 'bar',
+            height: 220,
+            toolbar: { show: false },
+            background: 'transparent',
+            foreColor: dark ? '#94a3b8' : '#6b7280',
+            animations: { enabled: true, easing: 'easeinout', speed: 600 },
+        },
+        theme: { mode: dark ? 'dark' : 'light' },
+        plotOptions: {
+            bar: { borderRadius: 5, columnWidth: '65%', grouped: true }
+        },
+        dataLabels: { enabled: false },
+        colors: ['#10b981', '#94a3b8'],
+        xaxis: {
+            categories: @json($empleadoLabels),
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+        },
+        yaxis: { min: 0, labels: { formatter: v => v + 'h' } },
+        grid: {
+            borderColor: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+            xaxis: { lines: { show: false } },
+        },
+        tooltip: { y: { formatter: v => v + 'h' } },
+        legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px' },
+    };
+}
 
-// Update chart colors when dark mode toggles
+const chartDias = new ApexCharts(document.getElementById('chartDias'), diasOptions(isDark()));
+const chartEmp  = new ApexCharts(document.getElementById('chartEmpleados'), empleadosOptions(isDark()));
+chartDias.render();
+chartEmp.render();
+
+// Update charts when dark mode toggles
 const origToggle = window.toggleTheme;
 window.toggleTheme = function() {
     origToggle();
-    [chartDias, chartEmp].forEach(c => {
-        c.options.scales.y.grid.color = gridColor();
-        c.options.scales.y.ticks.color = textColor();
-        c.options.scales.x.ticks.color = textColor();
-        c.update();
-    });
+    const dark = isDark();
+    chartDias.updateOptions(diasOptions(dark));
+    chartEmp.updateOptions(empleadosOptions(dark));
 };
 </script>
 @endpush

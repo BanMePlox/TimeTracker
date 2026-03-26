@@ -122,6 +122,67 @@ class InformeController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
+    public function resumen(Request $request)
+    {
+        $mes    = (int) ($request->mes  ?? now()->month);
+        $anio   = (int) ($request->anio ?? now()->year);
+
+        $desde = Carbon::create($anio, $mes, 1)->startOfDay();
+        $hasta = $desde->copy()->endOfMonth();
+
+        // Working days in the month (Mon–Fri, excluding today if in the future)
+        $diasLaborables = 0;
+        $cursor = $desde->copy();
+        $limite = $hasta->copy()->min(now());
+        while ($cursor->lte($limite)) {
+            if ($cursor->isWeekday()) $diasLaborables++;
+            $cursor->addDay();
+        }
+
+        $empleados = User::where('role', 'empleado')->orderBy('name')->get();
+        $resumen = [];
+
+        foreach ($empleados as $emp) {
+            $fichajes = $emp->fichajes()
+                ->whereBetween('created_at', [$desde, $hasta])
+                ->orderBy('created_at')
+                ->get();
+
+            $fichajesPorDia = $fichajes->groupBy(fn($f) => $f->created_at->format('Y-m-d'));
+
+            $totalMinutos = 0;
+            $diasTrabajados = 0;
+            foreach ($fichajesPorDia as $fDia) {
+                $min = $this->calcularMinutosSimple($fDia->sortBy('created_at'));
+                if ($min > 0) {
+                    $totalMinutos += $min;
+                    $diasTrabajados++;
+                }
+            }
+
+            $horasEsperadas = $diasLaborables * ($emp->horas_diarias ?? 8);
+            $horasTrabajadas = round($totalMinutos / 60, 1);
+            $diferencia = round($horasTrabajadas - $horasEsperadas, 1);
+
+            $resumen[] = [
+                'usuario'          => $emp,
+                'dias_trabajados'  => $diasTrabajados,
+                'dias_laborables'  => $diasLaborables,
+                'horas_trabajadas' => $horasTrabajadas,
+                'horas_esperadas'  => $horasEsperadas,
+                'diferencia'       => $diferencia,
+            ];
+        }
+
+        $meses = collect(range(1, 12))->mapWithKeys(fn($m) => [
+            $m => Carbon::create(null, $m)->locale('es')->monthName
+        ]);
+
+        $mesNombre = Carbon::create($anio, $mes, 1)->locale('es')->monthName;
+
+        return view('admin.informes.resumen', compact('resumen', 'mes', 'anio', 'meses', 'mesNombre'));
+    }
+
     public function pdf(Request $request)
     {
         $usuarios = User::where('role', 'empleado')->orderBy('name')->get();
@@ -166,6 +227,25 @@ class InformeController extends Controller
         $mesNombre = Carbon::create($anio, $mes, 1)->locale('es')->monthName;
 
         return view('admin.informes.pdf', compact('resumen', 'usuarios', 'mes', 'anio', 'mesNombre', 'userId'));
+    }
+
+    private function calcularMinutosSimple($fichajes): int
+    {
+        $minutos = 0;
+        $desde = null;
+        foreach ($fichajes as $f) {
+            if (in_array($f->tipo, ['entrada', 'reanudacion'])) {
+                $desde = $f->created_at;
+            } elseif (in_array($f->tipo, ['pausa', 'salida']) && $desde) {
+                $minutos += $desde->diffInMinutes($f->created_at);
+                $desde = null;
+            }
+        }
+        // Still clocked in
+        if ($desde) {
+            $minutos += $desde->diffInMinutes(now());
+        }
+        return $minutos;
     }
 
     private function calcularHoras($fichajes)

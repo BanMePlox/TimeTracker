@@ -76,6 +76,45 @@ class DashboardController extends Controller
             $empleadoEsperado[] = round($emp->horas_diarias * max(now()->dayOfWeek ?: 7, 1), 1);
         }
 
+        // Employees who have exceeded their daily hours without clocking out (30 min grace period)
+        $sinSalida = User::where('role', 'empleado')
+            ->get()
+            ->filter(function ($user) {
+                $entrada = $user->fichajes()
+                    ->whereDate('created_at', today())
+                    ->where('tipo', 'entrada')
+                    ->oldest()
+                    ->first();
+                if (!$entrada) return false;
+
+                $ultimo = $user->fichajes()
+                    ->whereDate('created_at', today())
+                    ->latest()
+                    ->first();
+                if (!$ultimo || !in_array($ultimo->tipo, ['entrada', 'reanudacion'])) {
+                    return false;
+                }
+
+                $minutosEsperados = ($user->horas_diarias ?? 8) * 60;
+                $minutosDesdeEntrada = $entrada->created_at->diffInMinutes(now());
+                return $minutosDesdeEntrada >= ($minutosEsperados + 30);
+            })
+            ->map(function ($user) {
+                $entrada = $user->fichajes()
+                    ->whereDate('created_at', today())
+                    ->where('tipo', 'entrada')
+                    ->oldest()
+                    ->first();
+                $minutosDesdeEntrada = $entrada->created_at->diffInMinutes(now());
+                $minutosEsperados = ($user->horas_diarias ?? 8) * 60;
+                return [
+                    'name'    => $user->name,
+                    'desde'   => $entrada->created_at->format('H:i'),
+                    'exceso'  => $minutosDesdeEntrada - $minutosEsperados,
+                ];
+            })
+            ->values();
+
         return view('admin.dashboard', compact(
             'totalUsuarios',
             'fichajesHoy',
@@ -86,7 +125,8 @@ class DashboardController extends Controller
             'chartHoras',
             'empleadoLabels',
             'empleadoHoras',
-            'empleadoEsperado'
+            'empleadoEsperado',
+            'sinSalida'
         ));
     }
 

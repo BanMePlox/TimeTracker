@@ -65,6 +65,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->name('admin.')->group(fun
     // Informes
     Route::get('informes', [InformeController::class, 'index'])->name('informes.index');
     Route::get('informes/export', [InformeController::class, 'export'])->name('informes.export');
+    Route::get('informes/resumen', [InformeController::class, 'resumen'])->name('informes.resumen');
     Route::get('informes/pdf', [InformeController::class, 'pdf'])->name('informes.pdf');
 
     // Log de actividad (solo lectura)
